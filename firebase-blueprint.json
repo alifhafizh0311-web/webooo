@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["email", "role"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A chat session between a user and admin",
+      "type": "object",
+      "properties": {
+        "userEmail": { "type": "string" },
+        "packageId": { "type": "string" },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "sender": { "type": "string", "enum": ["user", "admin"] },
+              "text": { "type": "string" },
+              "timestamp": { "type": "number" }
+            },
+            "required": ["id", "sender", "text", "timestamp"]
+          }
+        },
+        "status": { "type": "string", "enum": ["open", "closed"] }
+      },
+      "required": ["userEmail", "packageId", "messages", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles and roles"
+    },
+    "chats/{chatId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Chat sessions for orders"
+    }
+  }
+}

@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - email: string (required)
+    //   - role: string (required, 'user' or 'admin')
+    //
+    // Collection: chats
+    // Document ID: {chatId}
+    // Fields:
+    //   - userEmail: string (required)
+    //   - packageId: string (required)
+    //   - messages: array (required)
+    //   - status: string (required, 'open' or 'closed')
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "alifhafizh0311@gmail.com" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isOwner(email) {
+      return isAuthenticated() && request.auth.token.email == email;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.keys().hasOnly(['email', 'role']) &&
+             data.email is string && data.email.size() > 0 &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidChat(data) {
+      return data.keys().hasOnly(['userEmail', 'packageId', 'messages', 'status']) &&
+             data.userEmail is string && data.userEmail.size() > 0 &&
+             data.packageId is string && data.packageId.size() > 0 &&
+             data.messages is list &&
+             data.status in ['open', 'closed'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && 
+                    request.auth.uid == userId && 
+                    isValidUser(request.resource.data) &&
+                    request.resource.data.email == request.auth.token.email &&
+                    (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userEmail) || isAdmin());
+      allow create: if isAuthenticated() && 
+                    isOwner(request.resource.data.userEmail) &&
+                    isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && 
+                    (isOwner(resource.data.userEmail) || isAdmin()) &&
+                    isValidChat(request.resource.data) &&
+                    request.resource.data.userEmail == resource.data.userEmail; // userEmail immutable
+      allow delete: if isAdmin();
+    }
+  }
+}
