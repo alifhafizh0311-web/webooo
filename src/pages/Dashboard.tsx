@@ -1,12 +1,18 @@
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Rocket, Star } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { useStore } from '../lib/store';
+import { useStore, Testimonial } from '../lib/store';
 
 export default function Dashboard() {
-  const { getTestimonials } = useStore();
-  const testimonials = getTestimonials();
+  const { subscribeTestimonials } = useStore();
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeTestimonials(setTestimonials);
+    return () => unsubscribe();
+  }, []);
 
   const containerVariants = {
     hidden: { opacity: 0 },

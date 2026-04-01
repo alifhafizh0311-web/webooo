@@ -11,7 +11,12 @@ export default function AdminPanel() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'promos' | 'testimonials' | 'packages' | 'chats'>('chats');
 
-  const { getPromos, setPromos, getTestimonials, setTestimonials, getPackages, setPackages, getChats, setChats } = useStore();
+  const { 
+    subscribePromos, addPromo, deletePromo,
+    subscribeTestimonials, addTestimonial, updateTestimonial, deleteTestimonial,
+    subscribePackages, updatePackage,
+    subscribeAllChats, sendMessage: sendChatMessage, updateChatStatus, deleteChat
+  } = useStore();
 
   const [promosList, setPromosList] = useState<Promo[]>([]);
   const [testisList, setTestisList] = useState<Testimonial[]>([]);
@@ -19,19 +24,27 @@ export default function AdminPanel() {
   const [chatsList, setChatsList] = useState<ChatSession[]>([]);
 
   useEffect(() => {
-    const auth = localStorage.getItem('webooo_admin_auth');
-    if (auth === 'true') {
+    const adminAuth = localStorage.getItem('webooo_admin_auth');
+    if (adminAuth === 'true') {
       setIsLoggedIn(true);
-      loadData();
     }
   }, []);
 
-  const loadData = () => {
-    setPromosList(getPromos());
-    setTestisList(getTestimonials());
-    setPackagesList(getPackages());
-    setChatsList(getChats());
-  };
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const unsubPromos = subscribePromos(setPromosList);
+    const unsubTestis = subscribeTestimonials(setTestisList);
+    const unsubPackages = subscribePackages(setPackagesList);
+    const unsubChats = subscribeAllChats(setChatsList);
+
+    return () => {
+      unsubPromos();
+      unsubTestis();
+      unsubPackages();
+      unsubChats();
+    };
+  }, [isLoggedIn]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +53,6 @@ export default function AdminPanel() {
       if (result.user.email === 'alifhafizh0311@gmail.com') {
         localStorage.setItem('webooo_admin_auth', 'true');
         setIsLoggedIn(true);
-        loadData();
         setError('');
       } else {
         await signOut(auth);
@@ -64,43 +76,62 @@ export default function AdminPanel() {
   };
 
   // Promo Handlers
-  const addPromo = () => {
-    const newPromo: Promo = { code: 'NEWPROMO', discountPercent: 10 };
-    const updated = [...promosList, newPromo];
-    setPromosList(updated);
-    setPromos(updated);
+  const handleAddPromo = async () => {
+    const code = prompt('Masukkan kode promo:');
+    const discount = prompt('Masukkan diskon (%):');
+    if (code && discount) {
+      await addPromo({ code: code.toUpperCase(), discountPercent: Number(discount) });
+    }
   };
-  const deletePromo = (code: string) => {
-    const updated = promosList.filter(p => p.code !== code);
-    setPromosList(updated);
-    setPromos(updated);
+  
+  const handleDeletePromo = async (code: string) => {
+    if (confirm('Hapus promo ini?')) {
+      await deletePromo(code);
+    }
   };
 
   // Testimonial Handlers
-  const addTesti = () => {
-    const newTesti: Testimonial = { id: Date.now().toString(), name: 'Nama', role: 'Peran', text: 'Testimoni' };
-    const updated = [...testisList, newTesti];
-    setTestisList(updated);
-    setTestimonials(updated);
+  const handleAddTesti = async () => {
+    await addTestimonial({
+      name: 'Nama Baru',
+      role: 'Jabatan',
+      text: 'Testimoni baru...'
+    });
   };
-  const deleteTesti = (id: string) => {
-    const updated = testisList.filter(t => t.id !== id);
-    setTestisList(updated);
-    setTestimonials(updated);
+  
+  const handleUpdateTesti = async (id: string, field: keyof Testimonial, value: string) => {
+    await updateTestimonial(id, { [field]: value });
+  };
+
+  const handleDeleteTesti = async (id: string) => {
+    if (confirm('Hapus testimoni ini?')) {
+      await deleteTestimonial(id);
+    }
   };
 
   // Package Handlers
-  const updatePackagePrice = (id: string, newPrice: number) => {
-    const updated = packagesList.map(p => p.id === id ? { ...p, price: newPrice } : p);
-    setPackagesList(updated);
-    setPackages(updated);
+  const handleUpdatePackagePrice = async (id: string, price: number) => {
+    await updatePackage(id, { price });
   };
 
   // Chat Handlers
-  const deleteChat = (id: string) => {
-    const updated = chatsList.filter(c => c.id !== id);
-    setChatsList(updated);
-    setChats(updated);
+  const handleSendAdminMsg = async (chatId: string, text: string) => {
+    if (!text) return;
+    await sendChatMessage(chatId, {
+      sender: 'admin',
+      text,
+      timestamp: Date.now()
+    });
+  };
+
+  const handleToggleChatStatus = async (chatId: string, currentStatus: 'open' | 'closed') => {
+    await updateChatStatus(chatId, currentStatus === 'open' ? 'closed' : 'open');
+  };
+
+  const handleDeleteChat = async (id: string) => {
+    if (confirm('Hapus chat ini?')) {
+      await deleteChat(id);
+    }
   };
 
   if (!isLoggedIn) {
@@ -193,22 +224,33 @@ export default function AdminPanel() {
                     <div>
                       <h4 className="font-semibold">{chat.userEmail}</h4>
                       <p className="text-sm text-gray-400">Paket: {chat.packageId}</p>
+                      <p className={`text-xs font-semibold mt-1 ${chat.status === 'open' ? 'text-green-400' : 'text-red-400'}`}>
+                        Status: {chat.status.toUpperCase()}
+                      </p>
                     </div>
-                    <button onClick={() => deleteChat(chat.id)} className="text-red-400 hover:text-red-300">
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleToggleChatStatus(chat.id, chat.status)}
+                        className="text-xs px-2 py-1 border border-white/20 rounded hover:bg-white/10"
+                      >
+                        {chat.status === 'open' ? 'Close Chat' : 'Open Chat'}
+                      </button>
+                      <button onClick={() => handleDeleteChat(chat.id)} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-2 bg-black p-4 rounded-lg max-h-60 overflow-y-auto">
-                    {chat.messages.map(msg => (
-                      <div key={msg.id} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
+                  <div className="space-y-2 bg-black p-4 rounded-lg max-h-60 overflow-y-auto mb-4">
+                    {chat.messages.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.sender === 'admin' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`p-2 rounded-lg max-w-[80%] text-sm ${msg.sender === 'admin' ? 'bg-white text-black' : 'bg-zinc-800 text-white'}`}>
                           {msg.text}
                         </div>
                       </div>
                     ))}
                   </div>
-                  {/* Admin reply simulation */}
-                  <div className="mt-4 flex space-x-2">
+                  
+                  <div className="flex space-x-2">
                     <input 
                       type="text" 
                       placeholder="Balas pesan..." 
@@ -218,22 +260,7 @@ export default function AdminPanel() {
                         if (e.key === 'Enter') {
                           const input = e.currentTarget;
                           if (!input.value) return;
-                          
-                          const newMsg = {
-                            id: Date.now().toString(),
-                            sender: 'admin' as const,
-                            text: input.value,
-                            timestamp: Date.now()
-                          };
-                          
-                          const updatedSession = {
-                            ...chat,
-                            messages: [...chat.messages, newMsg]
-                          };
-                          
-                          const updatedChats = chatsList.map(c => c.id === chat.id ? updatedSession : c);
-                          setChatsList(updatedChats);
-                          setChats(updatedChats);
+                          handleSendAdminMsg(chat.id, input.value);
                           input.value = '';
                         }
                       }}
@@ -242,22 +269,7 @@ export default function AdminPanel() {
                       onClick={() => {
                         const input = document.getElementById(`reply-${chat.id}`) as HTMLInputElement;
                         if (!input || !input.value) return;
-                        
-                        const newMsg = {
-                          id: Date.now().toString(),
-                          sender: 'admin' as const,
-                          text: input.value,
-                          timestamp: Date.now()
-                        };
-                        
-                        const updatedSession = {
-                          ...chat,
-                          messages: [...chat.messages, newMsg]
-                        };
-                        
-                        const updatedChats = chatsList.map(c => c.id === chat.id ? updatedSession : c);
-                        setChatsList(updatedChats);
-                        setChats(updatedChats);
+                        handleSendAdminMsg(chat.id, input.value);
                         input.value = '';
                       }}
                       className="px-4 py-2 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200"
@@ -273,7 +285,7 @@ export default function AdminPanel() {
 
         {activeTab === 'promos' && (
           <div>
-            <button onClick={addPromo} className="mb-6 px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200">
+            <button onClick={handleAddPromo} className="mb-6 px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200">
               + Tambah Promo
             </button>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -283,7 +295,7 @@ export default function AdminPanel() {
                     <h4 className="font-bold text-lg">{promo.code}</h4>
                     <p className="text-green-400">{promo.discountPercent}% OFF</p>
                   </div>
-                  <button onClick={() => deletePromo(promo.code)} className="text-red-400 hover:text-red-300">
+                  <button onClick={() => handleDeletePromo(promo.code)} className="text-red-400 hover:text-red-300">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
@@ -294,7 +306,7 @@ export default function AdminPanel() {
 
         {activeTab === 'testimonials' && (
           <div>
-            <button onClick={addTesti} className="mb-6 px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200">
+            <button onClick={handleAddTesti} className="mb-6 px-4 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200">
               + Tambah Testimoni
             </button>
             <div className="space-y-4">
@@ -304,34 +316,22 @@ export default function AdminPanel() {
                     <input 
                       type="text" 
                       value={testi.name} 
-                      onChange={(e) => {
-                        const updated = testisList.map(t => t.id === testi.id ? { ...t, name: e.target.value } : t);
-                        setTestisList(updated);
-                        setTestimonials(updated);
-                      }}
-                      className="bg-black border border-white/10 rounded px-2 py-1 text-sm w-full" 
+                      onChange={(e) => handleUpdateTesti(testi.id, 'name', e.target.value)}
+                      className="bg-black border border-white/10 rounded px-2 py-1 text-sm w-full font-bold" 
                     />
                     <input 
                       type="text" 
                       value={testi.role} 
-                      onChange={(e) => {
-                        const updated = testisList.map(t => t.id === testi.id ? { ...t, role: e.target.value } : t);
-                        setTestisList(updated);
-                        setTestimonials(updated);
-                      }}
+                      onChange={(e) => handleUpdateTesti(testi.id, 'role', e.target.value)}
                       className="bg-black border border-white/10 rounded px-2 py-1 text-sm w-full text-gray-400" 
                     />
                     <textarea 
                       value={testi.text} 
-                      onChange={(e) => {
-                        const updated = testisList.map(t => t.id === testi.id ? { ...t, text: e.target.value } : t);
-                        setTestisList(updated);
-                        setTestimonials(updated);
-                      }}
+                      onChange={(e) => handleUpdateTesti(testi.id, 'text', e.target.value)}
                       className="bg-black border border-white/10 rounded px-2 py-1 text-sm w-full min-h-[60px]" 
                     />
                   </div>
-                  <button onClick={() => deleteTesti(testi.id)} className="text-red-400 hover:text-red-300 mt-2">
+                  <button onClick={() => handleDeleteTesti(testi.id)} className="text-red-400 hover:text-red-300 mt-2">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
@@ -350,7 +350,7 @@ export default function AdminPanel() {
                   <input 
                     type="number" 
                     value={pkg.price} 
-                    onChange={(e) => updatePackagePrice(pkg.id, Number(e.target.value))}
+                    onChange={(e) => handleUpdatePackagePrice(pkg.id, Number(e.target.value))}
                     className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:border-white/30" 
                   />
                 </div>

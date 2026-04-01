@@ -3,51 +3,58 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MessageCircle, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { useStore, ChatSession, ChatMessage } from '../lib/store';
+import { useStore, ChatSession, Package } from '../lib/store';
 
 export default function History() {
-  const { getUser, getChats, setChats, getPackages } = useStore();
+  const { getUser, subscribeUserChats, subscribePackages, sendMessage } = useStore();
   const navigate = useNavigate();
   const userEmail = getUser();
   
   const [userChats, setUserChats] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [message, setMessage] = useState('');
-  const packages = getPackages();
+  const [packages, setPackages] = useState<Package[]>([]);
 
   useEffect(() => {
     if (!userEmail) {
       navigate('/login');
       return;
     }
-    const allChats = getChats();
-    setUserChats(allChats.filter(c => c.userEmail === userEmail));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail, navigate]);
 
-  const sendMessage = (e: React.FormEvent) => {
+    const unsubChats = subscribeUserChats(userEmail, (filtered) => {
+      setUserChats(filtered);
+      
+      // Update active chat if it's open
+      if (activeChat) {
+        const updatedActive = filtered.find(c => c.id === activeChat.id);
+        if (updatedActive) setActiveChat(updatedActive);
+      }
+    });
+
+    const unsubPkgs = subscribePackages((pkgs) => {
+      setPackages(pkgs);
+    });
+
+    return () => {
+      unsubChats();
+      unsubPkgs();
+    };
+  }, [userEmail, navigate, activeChat?.id]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message || !activeChat || !userEmail) return;
 
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: message,
-      timestamp: Date.now(),
-    };
-
-    const updatedSession = {
-      ...activeChat,
-      messages: [...activeChat.messages, newMsg],
-    };
-
-    const allChats = getChats();
-    const updatedAllChats = allChats.map(c => c.id === activeChat.id ? updatedSession : c);
-    setChats(updatedAllChats);
-    
-    setActiveChat(updatedSession);
-    setUserChats(updatedAllChats.filter(c => c.userEmail === userEmail));
-    setMessage('');
+    try {
+      await sendMessage(activeChat.id, {
+        sender: 'user',
+        text: message,
+        timestamp: Date.now()
+      });
+      setMessage('');
+    } catch (error) {
+      console.error('Gagal mengirim pesan:', error);
+    }
   };
 
   const getPackageName = (pkgId: string) => {
@@ -139,7 +146,7 @@ export default function History() {
                   </div>
                 ))}
               </div>
-              <form onSubmit={sendMessage} className="flex space-x-2 pt-4 border-t border-white/10 mt-auto">
+              <form onSubmit={handleSendMessage} className="flex space-x-2 pt-4 border-t border-white/10 mt-auto">
                 <input
                   type="text"
                   value={message}

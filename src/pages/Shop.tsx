@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Check, MessageCircle, X } from 'lucide-react';
@@ -6,9 +6,19 @@ import Navbar from '../components/Navbar';
 import { useStore, Package, Promo, ChatSession, ChatMessage } from '../lib/store';
 
 export default function Shop() {
-  const { getPackages, getPromos, getChats, setChats, getUser } = useStore();
-  const packages = getPackages();
-  const promos = getPromos();
+  const { 
+    subscribePackages, 
+    subscribePromos, 
+    subscribeUserChats, 
+    createChat, 
+    sendMessage: sendChatMessage, 
+    getUser 
+  } = useStore();
+  
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [userChats, setUserChats] = useState<ChatSession[]>([]);
+  
   const navigate = useNavigate();
   const userEmail = getUser();
 
@@ -22,6 +32,30 @@ export default function Shop() {
   const [message, setMessage] = useState('');
   const [chatSession, setChatSession] = useState<ChatSession | null>(null);
 
+  useEffect(() => {
+    const unsubPackages = subscribePackages(setPackages);
+    const unsubPromos = subscribePromos(setPromos);
+    
+    let unsubChats = () => {};
+    if (userEmail) {
+      unsubChats = subscribeUserChats(userEmail, setUserChats);
+    }
+
+    return () => {
+      unsubPackages();
+      unsubPromos();
+      unsubChats();
+    };
+  }, [userEmail]);
+
+  // Update current chat session when userChats changes
+  useEffect(() => {
+    if (chatSession && userChats.length > 0) {
+      const updated = userChats.find(c => c.id === chatSession.id);
+      if (updated) setChatSession(updated);
+    }
+  }, [userChats]);
+
   const handleBuy = (pkg: Package) => {
     if (!userEmail) {
       navigate('/login');
@@ -32,6 +66,14 @@ export default function Shop() {
     setAppliedPromo(null);
     setPromoCode('');
     setPromoError('');
+    
+    // Check if there's already an open chat for this package
+    const existing = userChats.find(c => c.packageId === pkg.id && c.status === 'open');
+    if (existing) {
+      setChatSession(existing);
+    } else {
+      setChatSession(null);
+    }
   };
 
   const applyPromo = () => {
@@ -45,64 +87,31 @@ export default function Shop() {
     }
   };
 
-  const startChat = (e: React.FormEvent) => {
+  const startChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userEmail || !message || !selectedPackage) return;
 
-    const allChats = getChats();
-    const existingSession = allChats.find(c => c.userEmail === userEmail && c.packageId === selectedPackage.id);
-
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
+    const chatId = await createChat(userEmail, selectedPackage.id);
+    await sendChatMessage(chatId, {
       sender: 'user',
       text: message,
       timestamp: Date.now(),
-    };
-
-    if (existingSession) {
-      const updatedSession = {
-        ...existingSession,
-        messages: [...existingSession.messages, newMsg]
-      };
-      setChats(allChats.map(c => c.id === existingSession.id ? updatedSession : c));
-      setChatSession(updatedSession);
-    } else {
-      const newSession: ChatSession = {
-        id: Date.now().toString(),
-        userEmail: userEmail,
-        packageId: selectedPackage.id,
-        messages: [newMsg],
-        status: 'open',
-      };
-      setChats([...allChats, newSession]);
-      setChatSession(newSession);
-    }
+    });
     
     setMessage('');
-    
-    // Simulate telegram notification (console log for now)
     console.log(`[TELEGRAM BOT] New message from ${userEmail} for package ${selectedPackage.name}`);
   };
 
-  const sendMessage = (e: React.FormEvent) => {
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message || !chatSession) return;
 
-    const newMsg: ChatMessage = {
-      id: Date.now().toString(),
+    await sendChatMessage(chatSession.id, {
       sender: 'user',
       text: message,
       timestamp: Date.now(),
-    };
-
-    const updatedSession = {
-      ...chatSession,
-      messages: [...chatSession.messages, newMsg],
-    };
-
-    const allChats = getChats();
-    setChats(allChats.map(c => c.id === chatSession.id ? updatedSession : c));
-    setChatSession(updatedSession);
+    });
+    
     setMessage('');
   };
 

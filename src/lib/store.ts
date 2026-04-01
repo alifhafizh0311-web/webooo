@@ -1,3 +1,19 @@
+import { 
+  collection, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  orderBy,
+  addDoc,
+  getDoc,
+  arrayUnion
+} from 'firebase/firestore';
+import { db, auth } from '../firebase';
+
 export interface Testimonial {
   id: string;
   name: string;
@@ -32,21 +48,104 @@ export interface ChatSession {
   status: 'open' | 'closed';
 }
 
-const defaultTestimonials: Testimonial[] = [
-  { id: '1', name: 'Budi Santoso', role: 'Pemilik UMKM', text: 'Website saya jadi lebih profesional, penjualan meningkat tajam. Terima kasih Webooo!' },
-  { id: '2', name: 'Siti Aminah', role: 'Freelancer', text: 'Portofolio saya terlihat sangat modern. Proses pembuatannya juga cepat banget.' },
-];
+export const useStore = () => {
+  return {
+    // Testimonials
+    subscribeTestimonials: (callback: (data: Testimonial[]) => void) => {
+      return onSnapshot(collection(db, 'testimonials'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Testimonial));
+        callback(data);
+      });
+    },
+    addTestimonial: async (data: Omit<Testimonial, 'id'>) => {
+      await addDoc(collection(db, 'testimonials'), data);
+    },
+    updateTestimonial: async (id: string, data: Partial<Testimonial>) => {
+      await updateDoc(doc(db, 'testimonials', id), data);
+    },
+    deleteTestimonial: async (id: string) => {
+      await deleteDoc(doc(db, 'testimonials', id));
+    },
 
-const defaultPackages: Package[] = [
-  { id: 'basic', name: 'Basic', price: 50000, features: ['1 Halaman Landing Page', 'Desain Modern', 'Gratis Hosting', 'Revisi 1x'] },
-  { id: 'standard', name: 'Standard', price: 150000, features: ['3 Halaman Website', 'Desain Premium', 'Gratis Hosting & Domain (.my.id)', 'Revisi 3x', 'SEO Basic'] },
-  { id: 'premium', name: 'Premium', price: 350000, features: ['Hingga 10 Halaman', 'Desain Custom Eksklusif', 'Gratis Hosting & Domain (.com)', 'Revisi Unlimited', 'SEO Advanced', 'Prioritas Support'] },
-];
+    // Packages
+    subscribePackages: (callback: (data: Package[]) => void) => {
+      return onSnapshot(collection(db, 'packages'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Package));
+        callback(data);
+      });
+    },
+    updatePackage: async (id: string, data: Partial<Package>) => {
+      await setDoc(doc(db, 'packages', id), data, { merge: true });
+    },
 
-const defaultPromos: Promo[] = [
-  { code: 'WEBOOO50', discountPercent: 50 },
-  { code: 'MURAH', discountPercent: 10 },
-];
+    // Promos
+    subscribePromos: (callback: (data: Promo[]) => void) => {
+      return onSnapshot(collection(db, 'promos'), (snapshot) => {
+        const data = snapshot.docs.map(doc => doc.data() as Promo);
+        callback(data);
+      });
+    },
+    addPromo: async (data: Promo) => {
+      await setDoc(doc(db, 'promos', data.code), data);
+    },
+    deletePromo: async (code: string) => {
+      await deleteDoc(doc(db, 'promos', code));
+    },
+
+    // Chats
+    subscribeUserChats: (email: string, callback: (data: ChatSession[]) => void) => {
+      const q = query(collection(db, 'chats'), where('userEmail', '==', email));
+      return onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatSession));
+        callback(data);
+      });
+    },
+    subscribeAllChats: (callback: (data: ChatSession[]) => void) => {
+      return onSnapshot(collection(db, 'chats'), (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatSession));
+        callback(data);
+      });
+    },
+    createChat: async (userEmail: string, packageId: string) => {
+      const newChat: Omit<ChatSession, 'id'> = {
+        userEmail,
+        packageId,
+        messages: [],
+        status: 'open'
+      };
+      const docRef = await addDoc(collection(db, 'chats'), newChat);
+      return docRef.id;
+    },
+    sendMessage: async (chatId: string, message: Omit<ChatMessage, 'id'>) => {
+      const chatRef = doc(db, 'chats', chatId);
+      const newMessage = {
+        ...message,
+        id: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      };
+      await updateDoc(chatRef, {
+        messages: arrayUnion(newMessage)
+      });
+    },
+    updateChatStatus: async (chatId: string, status: 'open' | 'closed') => {
+      await updateDoc(doc(db, 'chats', chatId), { status });
+    },
+    deleteChat: async (chatId: string) => {
+      await deleteDoc(doc(db, 'chats', chatId));
+    },
+
+    // Auth
+    setUser: (email: string | null) => {
+      if (email) {
+        localStorage.setItem('webooo_user_email', email);
+      } else {
+        localStorage.removeItem('webooo_user_email');
+      }
+      window.dispatchEvent(new Event('webooo_auth_change'));
+    },
+    getUser: () => localStorage.getItem('webooo_user_email'),
+    isAdmin: () => localStorage.getItem('webooo_user_email') === 'alifhafizh0311@gmail.com',
+  };
+};
 
 export const getStoreData = <T>(key: string, defaultValue: T): T => {
   const data = localStorage.getItem(key);
@@ -62,29 +161,4 @@ export const getStoreData = <T>(key: string, defaultValue: T): T => {
 
 export const setStoreData = <T>(key: string, value: T): void => {
   localStorage.setItem(key, JSON.stringify(value));
-};
-
-export const getUser = () => getStoreData<string | null>('webooo_user_email', null);
-export const setUser = (email: string | null) => {
-  setStoreData('webooo_user_email', email);
-  window.dispatchEvent(new Event('webooo_auth_change'));
-};
-
-export const useStore = () => {
-  return {
-    getTestimonials: () => getStoreData<Testimonial[]>('webooo_testimonials', defaultTestimonials),
-    setTestimonials: (data: Testimonial[]) => setStoreData('webooo_testimonials', data),
-    
-    getPackages: () => getStoreData<Package[]>('webooo_packages', defaultPackages),
-    setPackages: (data: Package[]) => setStoreData('webooo_packages', data),
-    
-    getPromos: () => getStoreData<Promo[]>('webooo_promos', defaultPromos),
-    setPromos: (data: Promo[]) => setStoreData('webooo_promos', data),
-    
-    getChats: () => getStoreData<ChatSession[]>('webooo_chats', []),
-    setChats: (data: ChatSession[]) => setStoreData('webooo_chats', data),
-
-    getUser,
-    setUser,
-  };
 };

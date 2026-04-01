@@ -43,6 +43,41 @@
     "chats/{chatId}": {
       "schema": { "$ref": "#/entities/ChatSession" },
       "description": "Chat sessions for orders"
+    },
+    "testimonials/{id}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "text": { "type": "string" }
+        },
+        "required": ["name", "role", "text"]
+      },
+      "description": "User testimonials"
+    },
+    "packages/{id}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "features": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["name", "price", "features"]
+      },
+      "description": "Service packages"
+    },
+    "promos/{code}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "discountPercent": { "type": "number" }
+        },
+        "required": ["code", "discountPercent"]
+      },
+      "description": "Promo codes"
     }
   }
 }

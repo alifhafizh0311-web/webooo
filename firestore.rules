@@ -2,52 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {userId}
-    // Fields:
-    //   - email: string (required)
-    //   - role: string (required, 'user' or 'admin')
-    //
-    // Collection: chats
-    // Document ID: {chatId}
-    // Fields:
-    //   - userEmail: string (required)
-    //   - packageId: string (required)
-    //   - messages: array (required)
-    //   - status: string (required, 'open' or 'closed')
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.email == "alifhafizh0311@gmail.com" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
-      );
+      return isAuthenticated() && request.auth.token.email == "alifhafizh0311@gmail.com";
     }
 
     function isOwner(email) {
       return isAuthenticated() && request.auth.token.email == email;
     }
 
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
     function isValidUser(data) {
       return data.keys().hasOnly(['email', 'role']) &&
              data.email is string && data.email.size() > 0 &&
@@ -62,30 +28,52 @@ service cloud.firestore {
              data.status in ['open', 'closed'];
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
-    
+    function isValidTestimonial(data) {
+      return data.keys().hasOnly(['name', 'role', 'text']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.role is string && data.role.size() > 0 &&
+             data.text is string && data.text.size() > 0;
+    }
+
+    function isValidPackage(data) {
+      return data.keys().hasOnly(['name', 'price', 'features']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is number && data.price >= 0 &&
+             data.features is list;
+    }
+
+    function isValidPromo(data) {
+      return data.keys().hasOnly(['code', 'discountPercent']) &&
+             data.code is string && data.code.size() > 0 &&
+             data.discountPercent is number && data.discountPercent >= 0 && data.discountPercent <= 100;
+    }
+
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow create: if isAuthenticated() && 
-                    request.auth.uid == userId && 
-                    isValidUser(request.resource.data) &&
-                    request.resource.data.email == request.auth.token.email &&
-                    (request.resource.data.role == 'user' || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow update: if isAdmin() && isValidUser(request.resource.data);
     }
 
     match /chats/{chatId} {
       allow read: if isAuthenticated() && (isOwner(resource.data.userEmail) || isAdmin());
-      allow create: if isAuthenticated() && 
-                    isOwner(request.resource.data.userEmail) &&
-                    isValidChat(request.resource.data);
-      allow update: if isAuthenticated() && 
-                    (isOwner(resource.data.userEmail) || isAdmin()) &&
-                    isValidChat(request.resource.data) &&
-                    request.resource.data.userEmail == resource.data.userEmail; // userEmail immutable
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userEmail) && isValidChat(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.userEmail) || isAdmin()) && isValidChat(request.resource.data);
       allow delete: if isAdmin();
+    }
+
+    match /testimonials/{id} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidTestimonial(request.resource.data);
+    }
+
+    match /packages/{id} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidPackage(request.resource.data);
+    }
+
+    match /promos/{code} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidPromo(request.resource.data);
     }
   }
 }
