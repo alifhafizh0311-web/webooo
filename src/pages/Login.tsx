@@ -20,7 +20,13 @@ export default function Login() {
       }
     } catch (err: any) {
       console.error(err);
-      setError('Gagal login dengan Google. Silakan coba lagi.');
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('Login dibatalkan karena jendela popup ditutup. Pastikan popup tidak diblokir oleh browser.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('Domain ini belum diizinkan di Firebase Console. Tambahkan domain ini ke Authorized Domains.');
+      } else {
+        setError('Gagal login dengan Google. Silakan coba lagi.');
+      }
     }
   };
 

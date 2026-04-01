@@ -17,7 +17,7 @@ export default function LoadingScreen() {
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1, ease: 'easeOut' }}
+        transition={{ duration: 1 }}
         className="relative flex flex-col items-center"
       >
         <h1 className="text-6xl md:text-8xl font-bold text-white tracking-tighter relative">

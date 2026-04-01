@@ -78,6 +78,20 @@
         "required": ["code", "discountPercent"]
       },
       "description": "Promo codes"
+    },
+    "public_chats/{id}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "sender": { "type": "string" },
+          "senderEmail": { "type": "string" },
+          "text": { "type": "string" },
+          "timestamp": { "type": "number" }
+        },
+        "required": ["id", "sender", "senderEmail", "text", "timestamp"]
+      },
+      "description": "Public chat messages"
     }
   }
 }

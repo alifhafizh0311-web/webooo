@@ -3,25 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Check, MessageCircle, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { useStore, Package, Promo, ChatSession, ChatMessage } from '../lib/store';
+import { useStore, storeActions, Package, Promo, ChatSession, ChatMessage, DEFAULT_PACKAGES } from '../lib/store';
 
 export default function Shop() {
+  const { userEmail } = useStore();
   const { 
     subscribePackages, 
     subscribePromos, 
     subscribeUserChats, 
+    subscribePublicChats,
     createChat, 
     sendMessage: sendChatMessage, 
-    getUser 
-  } = useStore();
+    sendPublicMessage,
+    seedPackages,
+  } = storeActions;
   
-  const [packages, setPackages] = useState<Package[]>([]);
+  const [packages, setPackages] = useState<Package[]>(DEFAULT_PACKAGES);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [userChats, setUserChats] = useState<ChatSession[]>([]);
+  const [publicChats, setPublicChats] = useState<ChatMessage[]>([]);
   
   const navigate = useNavigate();
-  const userEmail = getUser();
-
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -30,11 +32,19 @@ export default function Shop() {
   
   // Chat state
   const [message, setMessage] = useState('');
+  const [publicMessage, setPublicMessage] = useState('');
   const [chatSession, setChatSession] = useState<ChatSession | null>(null);
 
   useEffect(() => {
-    const unsubPackages = subscribePackages(setPackages);
+    const unsubPackages = subscribePackages((data) => {
+      if (data.length > 0) {
+        setPackages(data);
+      } else {
+        setPackages(DEFAULT_PACKAGES);
+      }
+    });
     const unsubPromos = subscribePromos(setPromos);
+    const unsubPublic = subscribePublicChats(setPublicChats);
     
     let unsubChats = () => {};
     if (userEmail) {
@@ -44,6 +54,7 @@ export default function Shop() {
     return () => {
       unsubPackages();
       unsubPromos();
+      unsubPublic();
       unsubChats();
     };
   }, [userEmail]);
@@ -94,6 +105,7 @@ export default function Shop() {
     const chatId = await createChat(userEmail, selectedPackage.id);
     await sendChatMessage(chatId, {
       sender: 'user',
+      senderEmail: userEmail,
       text: message,
       timestamp: Date.now(),
     });
@@ -104,15 +116,32 @@ export default function Shop() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message || !chatSession) return;
+    if (!message || !chatSession || !userEmail) return;
 
     await sendChatMessage(chatSession.id, {
       sender: 'user',
+      senderEmail: userEmail,
       text: message,
       timestamp: Date.now(),
     });
     
     setMessage('');
+  };
+
+  const handleSendPublic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!publicMessage || !userEmail) {
+      if (!userEmail) navigate('/login');
+      return;
+    }
+
+    await sendPublicMessage({
+      sender: userEmail.split('@')[0],
+      senderEmail: userEmail,
+      text: publicMessage,
+      timestamp: Date.now()
+    });
+    setPublicMessage('');
   };
 
   const calculatePrice = (price: number) => {
@@ -137,10 +166,18 @@ export default function Shop() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-gray-400 text-lg"
+            className="text-gray-400 text-lg mb-8"
           >
             Harga transparan, tanpa biaya tersembunyi.
           </motion.p>
+          {packages.length === 0 && (
+            <button 
+              onClick={() => seedPackages()}
+              className="px-6 py-2 border border-white/20 rounded-full text-sm hover:bg-white/10 transition-colors"
+            >
+              Klik jika paket kosong
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -190,6 +227,92 @@ export default function Shop() {
           ))}
         </div>
       </section>
+
+      {/* Public Chat Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+        <div className="bg-zinc-900/50 border border-white/10 rounded-3xl overflow-hidden flex flex-col h-[500px]">
+          <div className="p-6 border-b border-white/10 bg-black/50 flex items-center justify-between">
+            <div className="flex items-center">
+              <MessageCircle className="w-6 h-6 mr-3 text-white" />
+              <h2 className="text-xl font-bold">Public Support Chat</h2>
+            </div>
+            <span className="text-xs text-gray-500 uppercase tracking-widest">Real-time</span>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {publicChats.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-gray-500 italic">
+                Belum ada pesan. Jadilah yang pertama!
+              </div>
+            ) : (
+              publicChats.map((msg) => (
+                <div 
+                  key={msg.id} 
+                  className={`flex flex-col ${msg.senderEmail === userEmail ? 'items-end' : 'items-start'}`}
+                >
+                  <div className={`max-w-[80%] p-4 rounded-2xl ${
+                    msg.senderEmail === userEmail 
+                      ? 'bg-white text-black rounded-tr-sm' 
+                      : 'bg-zinc-800 text-white rounded-tl-sm'
+                  }`}>
+                    <div className="flex justify-between items-baseline mb-1 space-x-4">
+                      <span className="text-[10px] font-bold uppercase opacity-70">{msg.sender}</span>
+                      <span className="text-[9px] opacity-50">
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-sm">{msg.text}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <form onSubmit={handleSendPublic} className="p-4 bg-black/50 border-t border-white/10 flex space-x-3">
+            <input
+              type="text"
+              value={publicMessage}
+              onChange={(e) => setPublicMessage(e.target.value)}
+              placeholder={userEmail ? "Ketik pesan publik..." : "Login untuk chat"}
+              className="flex-1 bg-zinc-800 border border-white/10 rounded-full px-6 py-3 focus:outline-none focus:border-white/30 text-sm"
+            />
+            <button
+              type="submit"
+              className="bg-white text-black px-6 py-3 rounded-full font-bold hover:bg-gray-200 transition-all"
+            >
+              Kirim
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* Floating Chat Button */}
+      {!isChatOpen && userEmail && (
+        <motion.button
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          whileHover={{ scale: 1.1 }}
+          onClick={() => {
+            if (userChats.length > 0) {
+              setChatSession(userChats[0]);
+              setSelectedPackage(packages.find(p => p.id === userChats[0].packageId) || packages[0]);
+              setIsChatOpen(true);
+            } else {
+              // If no chat, open with first package
+              if (packages.length > 0) {
+                setSelectedPackage(packages[0]);
+                setIsChatOpen(true);
+              }
+            }
+          }}
+          className="fixed bottom-8 right-8 z-40 bg-white text-black p-4 rounded-full shadow-[0_0_30px_rgba(255,255,255,0.4)] hover:shadow-[0_0_40px_rgba(255,255,255,0.6)] transition-all"
+        >
+          <MessageCircle className="w-8 h-8" />
+          {userChats.some(c => c.status === 'open') && (
+            <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-black" />
+          )}
+        </motion.button>
+      )}
 
       {/* Chat Modal */}
       {isChatOpen && selectedPackage && (

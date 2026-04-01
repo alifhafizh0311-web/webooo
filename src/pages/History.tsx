@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MessageCircle, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { useStore, ChatSession, Package } from '../lib/store';
+import { useStore, storeActions, ChatSession, Package } from '../lib/store';
 
 export default function History() {
-  const { getUser, subscribeUserChats, subscribePackages, sendMessage } = useStore();
+  const { userEmail } = useStore();
+  const { subscribeUserChats, subscribePackages, sendMessage } = storeActions;
   const navigate = useNavigate();
-  const userEmail = getUser();
   
   const [userChats, setUserChats] = useState<ChatSession[]>([]);
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
@@ -48,6 +48,7 @@ export default function History() {
     try {
       await sendMessage(activeChat.id, {
         sender: 'user',
+        senderEmail: userEmail,
         text: message,
         timestamp: Date.now()
       });

@@ -3,10 +3,10 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Rocket, Star } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { useStore, Testimonial } from '../lib/store';
+import { useStore, storeActions, Testimonial } from '../lib/store';
 
 export default function Dashboard() {
-  const { subscribeTestimonials } = useStore();
+  const { subscribeTestimonials } = storeActions;
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function Dashboard() {
 
   const itemVariants = {
     hidden: { opacity: 0, y: 30 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
   };
 
   return (
@@ -38,7 +38,7 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
+          transition={{ duration: 0.8 }}
           className="mb-8"
         >
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-4">

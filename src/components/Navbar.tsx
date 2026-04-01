@@ -3,19 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
-import { getStoreData, setStoreData } from '../lib/store';
+import { useStore } from '../lib/store';
 
 export default function Navbar() {
-  const [userEmail, setUserEmail] = useState<string | null>(getStoreData('webooo_user_email', null));
+  const { userEmail, setUser } = useStore();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const handleAuthChange = () => {
-      setUserEmail(getStoreData('webooo_user_email', null));
-    };
-    window.addEventListener('webooo_auth_change', handleAuthChange);
-    return () => window.removeEventListener('webooo_auth_change', handleAuthChange);
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -23,8 +15,7 @@ export default function Navbar() {
     } catch (error) {
       console.error('Error signing out:', error);
     }
-    setStoreData('webooo_user_email', null);
-    window.dispatchEvent(new Event('webooo_auth_change'));
+    setUser(null);
     navigate('/dashboard');
   };
 

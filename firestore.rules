@@ -7,21 +7,25 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.email == "alifhafizh0311@gmail.com";
+      return isAuthenticated() && 
+             request.auth.token.email.lower() == "alifhafizh0311@gmail.com" && 
+             request.auth.token.email_verified == true;
     }
 
     function isOwner(email) {
-      return isAuthenticated() && request.auth.token.email == email;
+      return isAuthenticated() && 
+             request.auth.token.email != null && 
+             request.auth.token.email.lower() == email.lower();
     }
 
     function isValidUser(data) {
-      return data.keys().hasOnly(['email', 'role']) &&
+      return data.keys().hasAll(['email', 'role']) &&
              data.email is string && data.email.size() > 0 &&
              data.role in ['user', 'admin'];
     }
 
     function isValidChat(data) {
-      return data.keys().hasOnly(['userEmail', 'packageId', 'messages', 'status']) &&
+      return data.keys().hasAll(['userEmail', 'packageId', 'messages', 'status']) &&
              data.userEmail is string && data.userEmail.size() > 0 &&
              data.packageId is string && data.packageId.size() > 0 &&
              data.messages is list &&
@@ -29,23 +33,31 @@ service cloud.firestore {
     }
 
     function isValidTestimonial(data) {
-      return data.keys().hasOnly(['name', 'role', 'text']) &&
+      return data.keys().hasAll(['name', 'role', 'text']) &&
              data.name is string && data.name.size() > 0 &&
-             data.role is string && data.role.size() > 0 &&
+             data.role is string &&
              data.text is string && data.text.size() > 0;
     }
 
     function isValidPackage(data) {
-      return data.keys().hasOnly(['name', 'price', 'features']) &&
+      return data.keys().hasAll(['name', 'price', 'features']) &&
              data.name is string && data.name.size() > 0 &&
-             data.price is number && data.price >= 0 &&
+             data.price is number &&
              data.features is list;
     }
 
     function isValidPromo(data) {
-      return data.keys().hasOnly(['code', 'discountPercent']) &&
+      return data.keys().hasAll(['code', 'discountPercent']) &&
              data.code is string && data.code.size() > 0 &&
-             data.discountPercent is number && data.discountPercent >= 0 && data.discountPercent <= 100;
+             data.discountPercent is number;
+    }
+
+    function isValidPublicChat(data) {
+      return data.keys().hasAll(['sender', 'senderEmail', 'text', 'timestamp']) &&
+             data.sender is string &&
+             data.senderEmail is string &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.timestamp is number;
     }
 
     match /users/{userId} {
@@ -72,8 +84,20 @@ service cloud.firestore {
     }
 
     match /promos/{code} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAdmin() && isValidPromo(request.resource.data);
+    }
+
+    match /public_chats/{id} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                    (request.resource.data.senderEmail == request.auth.token.email || isAdmin()) && 
+                    isValidPublicChat(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /test/{id} {
+      allow read: if true;
     }
   }
 }
